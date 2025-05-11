@@ -1,11 +1,4 @@
-# Note: Ensure that the CSV file contains anonymized or placeholder email addresses for privacy.
-
 # Path to the CSV file containing email data
-# The CSV file should have columns: EMAIL, SUBJECT
-# Example:
-# EMAIL,SUBJECT
-# user1@example.com,Website Status Report
-# user2@example.com,Website Status Report
 $DataSource = "C:\_POWERSHELL\STATUSGREEN\STATUSGREEN.csv"
 
 # List of websites to check
@@ -17,10 +10,12 @@ $statusReport = "<table border='1' cellpadding='5' cellspacing='0'>"
 $statusReport += "<tr><th>Website</th><th>Status</th></tr>"
 $failedSites = @()
 
-# Check each website in the list
+# Check each website in the list using default credentials for SSO
 foreach ($site in $websites) {
     try {
-        $response = Invoke-WebRequest -Uri $site -Method Get -TimeoutSec 5
+        # Use -UseDefaultCredentials to leverage existing SSO session
+        $response = Invoke-WebRequest -Uri $site -Method Get -TimeoutSec 5 -UseDefaultCredentials -ErrorAction Stop
+        Write-Verbose "Checked $site, status code: $($response.StatusCode)"
         if ($response.StatusCode -eq 200) {
             $status = "GREEN"
             $color = "green"
@@ -31,6 +26,7 @@ foreach ($site in $websites) {
             $allGreen = $false
         }
     } catch {
+        Write-Verbose "Error checking $site: $_"
         $status = "RED"
         $color = "red"
         $failedSites += $site
