@@ -26,7 +26,7 @@ foreach ($site in $websites) {
             $allGreen = $false
         }
     } catch {
-        Write-Verbose "Error checking $site: $_"
+        Write-Verbose "Error checking ${site}: $_"
         $status = "RED"
         $color = "red"
         $failedSites += $site
