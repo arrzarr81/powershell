@@ -14,12 +14,23 @@ $failedSites = @()
 foreach ($site in $websites) {
     try {
         # Use -UseDefaultCredentials to leverage existing SSO session
+        Write-Verbose "Attempting to check $site"
         $response = Invoke-WebRequest -Uri $site -Method Get -TimeoutSec 5 -UseDefaultCredentials -ErrorAction Stop
         Write-Verbose "Checked $site, status code: $($response.StatusCode)"
         if ($response.StatusCode -eq 200) {
-            $status = "GREEN"
-            $color = "green"
+            Write-Verbose "Response content: $($response.Content.Substring(0, [Math]::Min(500, $response.Content.Length)))"
+            if ($response.Content -match "login|sign in|pin") {
+                Write-Verbose "Login page detected for $site"
+                $status = "RED"
+                $color = "red"
+                $failedSites += $site
+                $allGreen = $false
+            } else {
+                $status = "GREEN"
+                $color = "green"
+            }
         } else {
+            Write-Verbose "Non-200 status code for $site: $($response.StatusCode)"
             $status = "RED"
             $color = "red"
             $failedSites += $site
@@ -50,8 +61,9 @@ if (-not $allGreen) {
 # Send email to each entry in the CSV file
 Import-CSV $DataSource | ForEach-Object {
     try {
-        $ol = New-Object -ComObject Outlook.Application  
-        $Mail = $ol.CreateItem(0)
+        Write-Verbose "Sending email to $($_.EMAIL)"
+        $-bs = New-Object -ComObject Outlook.Application  
+        $Mail = $bs.CreateItem(0)
         
         # Email address from the CSV
         $Mail.Recipients.Add($_.EMAIL)    
@@ -67,7 +79,9 @@ Import-CSV $DataSource | ForEach-Object {
         $Mail.HTMLBody += "</body></html>"
         
         $Mail.Send()
+        Write-Verbose "Email sent to $($_.EMAIL)"
     } catch {
+        Write-Verbose "Error sending email to $($_.EMAIL): $_"
         $Mail.Delete()
         Write-Host "****************Error: Email not sent********************"
     }
