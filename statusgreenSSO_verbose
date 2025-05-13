@@ -1,0 +1,74 @@
+# Path to the CSV file containing email data
+$DataSource = "C:\_POWERSHELL\STATUSGREEN\STATUSGREEN.csv"
+
+# List of websites to check
+$websites = @("http://www.google.com", "http://www.example.com", "http://www.anotherpage.com")
+
+# Initialize status variables
+$allGreen = $true
+$statusReport = "<table border='1' cellpadding='5' cellspacing='0'>"
+$statusReport += "<tr><th>Website</th><th>Status</th></tr>"
+$failedSites = @()
+
+# Check each website in the list using default credentials for SSO
+foreach ($site in $websites) {
+    try {
+        # Use -UseDefaultCredentials to leverage existing SSO session
+        $response = Invoke-WebRequest -Uri $site -Method Get -TimeoutSec 5 -UseDefaultCredentials -ErrorAction Stop
+        Write-Verbose "Checked $site, status code: $($response.StatusCode)"
+        if ($response.StatusCode -eq 200) {
+            $status = "GREEN"
+            $color = "green"
+        } else {
+            $status = "RED"
+            $color = "red"
+            $failedSites += $site
+            $allGreen = $false
+        }
+    } catch {
+        Write-Verbose "Error checking ${site}: $_"
+        $status = "RED"
+        $color = "red"
+        $failedSites += $site
+        $allGreen = $false
+    }
+    # Add row to the HTML table
+    $statusReport += "<tr><td>$site</td><td style='color: $color;'>$status</td></tr>"
+}
+$statusReport += "</table>"
+
+# If any website has status "RED", display information and stop the script
+if (-not $allGreen) {
+    Write-Host "The following websites are not responding:"
+    foreach ($failedSite in $failedSites) {
+        Write-Host "- $failedSite"
+    }
+    Write-Host "Stopping email sending."
+    exit
+}
+
+# Send email to each entry in the CSV file
+Import-CSV $DataSource | ForEach-Object {
+    try {
+        $ol = New-Object -ComObject Outlook.Application  
+        $Mail = $ol.CreateItem(0)
+        
+        # Email address from the CSV
+        $Mail.Recipients.Add($_.EMAIL)    
+        $Mail.SentOnBehalfOfName = "info@example.com"
+        
+        # Email subject from the CSV
+        $Mail.Subject = $_.SUBJECT
+        
+        # Email body with HTML table and greetings
+        $Mail.HTMLBody = "<html><body>"
+        $Mail.HTMLBody += $statusReport
+        $Mail.HTMLBody += "<p>Best regards</p>"
+        $Mail.HTMLBody += "</body></html>"
+        
+        $Mail.Send()
+    } catch {
+        $Mail.Delete()
+        Write-Host "****************Error: Email not sent********************"
+    }
+}
